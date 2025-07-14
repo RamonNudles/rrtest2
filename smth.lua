@@ -5,7 +5,6 @@ local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera           = workspace.CurrentCamera
-local VirtualUser      = game:GetService("VirtualUser")
 
 -- Local player + mouse
 local LocalPlayer = Players.LocalPlayer
@@ -84,8 +83,6 @@ local RightDown = false
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightDown = true
-        -- ensure VirtualUser is capturing to allow click simulation
-        VirtualUser:CaptureController()
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
@@ -108,8 +105,7 @@ RunService.RenderStepped:Connect(function()
                 mousemoverel(delta.X, delta.Y)
             end
             -- TriggerBot: simulate left-click
-            VirtualUser:Button1Down(Enum.UserInputType.MouseButton1)
-            VirtualUser:Button1Up(Enum.UserInputType.MouseButton1)
+            Mouse:Click()
         end
     end
 end)
