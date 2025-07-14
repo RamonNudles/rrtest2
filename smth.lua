@@ -104,8 +104,14 @@ RunService.RenderStepped:Connect(function()
                               * Config.Sensitivity
                 mousemoverel(delta.X, delta.Y)
             end
-            -- TriggerBot: simulate left-click
-            Mouse:Click()
+
+            -- TriggerBot: simulate left-click at the target's screen point
+            if on then
+                UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, true,  -- press
+                                                      game, 1)
+                UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, false, -- release
+                                                      game, 1)
+            end
         end
     end
 end)
