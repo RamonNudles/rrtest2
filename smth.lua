@@ -10,11 +10,16 @@ local Camera           = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse       = LocalPlayer:GetMouse()
 
+-- Utility (for Silent Aim)
+local utility    = require(game:GetService("ReplicatedStorage").Modules.Utility)
+local oldRaycast = utility.Raycast
+
 -- Config
 local Config = {
     AimbotPart      = "Head",
     FOV             = 600,
     Sensitivity     = 1,
+    SilentAim       = true,
     WalkSpeedValue  = 50,
     InfiniteJump    = true,
     Noclip          = true,
@@ -25,6 +30,17 @@ local Config = {
     BlinkingESP     = false,
     ESPColor        = Color3.fromRGB(214, 0, 255),
 }
+
+-- Always-on Silent-Aim override
+utility.Raycast = function(origin, destination, filter, maxDist)
+    if Config.SilentAim then
+        local tgt = getBestTarget()
+        if tgt then
+            destination = tgt.Position
+        end
+    end
+    return oldRaycast(origin, destination, filter, maxDist)
+end
 
 -- Unified Silent-Aim + Aim-Lock
 
@@ -46,20 +62,21 @@ end)
 -- Helpers
 local function isValid(plr)
     if plr == LocalPlayer then return false end
-    local c,h = plr.Character, plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
-    return h and h.Health>0
+    local c = plr.Character
+    local h = c and c:FindFirstChildOfClass("Humanoid")
+    return h and h.Health > 0
 end
 
 local function getBestTarget()
     local best, bestMag = nil, Config.FOV
     for _,plr in ipairs(Players:GetPlayers()) do
         if isValid(plr) then
-            local part = plr.Character:FindFirstChild(Config.AimbotPart)
+            local part = plr.Character and plr.Character:FindFirstChild(Config.AimbotPart)
             if part then
                 local sp,on = Camera:WorldToViewportPoint(part.Position)
                 if on then
-                    local d = (Vector2.new(Mouse.X,Mouse.Y)-Vector2.new(sp.X,sp.Y)).Magnitude
-                    if d<bestMag then
+                    local d = (Vector2.new(Mouse.X,Mouse.Y) - Vector2.new(sp.X,sp.Y)).Magnitude
+                    if d < bestMag then
                         best, bestMag = part, d
                     end
                 end
@@ -69,32 +86,31 @@ local function getBestTarget()
     return best
 end
 
--- Hook both systems in one loop
+-- Main loop: enforce WalkSpeed + Aim-Lock
 RunService.RenderStepped:Connect(function()
-    -- 1) Aim-lock (cursor follow)
+    -- 1) WalkSpeed enforcement
+    do
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = Config.WalkSpeedValue
+            end
+        end
+    end
+
+    -- 2) Aim-Lock while right-click held
     if RightDown then
         local targetPart = getBestTarget()
         if targetPart then
             local sp,on = Camera:WorldToViewportPoint(targetPart.Position)
             if on then
-                local delta = (Vector2.new(sp.X,sp.Y)-Vector2.new(Mouse.X,Mouse.Y))*Config.Sensitivity
-                mousemoverel(delta.X,delta.Y)
+                local delta = (Vector2.new(sp.X,sp.Y) - Vector2.new(Mouse.X,Mouse.Y)) * Config.Sensitivity
+                mousemoverel(delta.X, delta.Y)
             end
         end
-    end
-
-    -- 2) Silent-Aim (raycast override)
-    utility.Raycast = function(origin, destination, filter, maxDist)
-        if Config.SilentAim then
-            local tgt = getBestTarget()
-            if tgt then
-                destination = tgt.Position
-            end
-        end
-        return oldRaycast(origin, destination, filter, maxDist)
     end
 end)
-
 
 -- ────────────────────────────────────────────────────────────────────────
 
@@ -248,27 +264,4 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Replace math.huge with a large finite number
-local IMMORTAL_HEALTH = 1e7
-
-local function makeImmortal()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.MaxHealth = IMMORTAL_HEALTH
-        hum.Health    = IMMORTAL_HEALTH
-        hum.Died:Connect(function() hum.Health = IMMORTAL_HEALTH end)
-        hum.HealthChanged:Connect(function(newH)
-            if newH < IMMORTAL_HEALTH then hum.Health = IMMORTAL_HEALTH end
-        end)
-    end
-end
-
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    makeImmortal()
-end)
-makeImmortal()
-
-print("haxegon_static loaded: ESP, AimLock (RMB skip dead), WalkSpeed enforced, InfiniteJump, Noclip active, Underground-TP on H")
+print("haxegon_static loaded: ESP, AimLock (RMB skip dead), Silent Aim, WalkSpeed enforced, InfiniteJump, Noclip active, Underground-TP on H")
