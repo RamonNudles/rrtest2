@@ -10,16 +10,11 @@ local Camera           = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse       = LocalPlayer:GetMouse()
 
--- Utility module & original raycast
-local utility    = require(game:GetService("ReplicatedStorage").Modules.Utility)
-local oldRaycast = utility.Raycast
-
 -- Config
 local Config = {
     AimbotPart      = "Head",
     FOV             = 600,
     Sensitivity     = 1,
-    SilentAim       = true,
     WalkSpeedValue  = 50,
     InfiniteJump    = true,
     Noclip          = true,
@@ -57,34 +52,6 @@ local function getBestTarget()
     end
     return best
 end
-
--- Always-on Silent Aim override (metamethod hook)
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args   = {...}
-
-    if Config.SilentAim and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
-        local tgt = getBestTarget()
-        if tgt then
-            if method == "Raycast" then
-                -- args = {origin, direction, params, ...}
-                local origin = args[1]
-                local dir    = (tgt.Position - origin).Unit * (args[2].Magnitude or args[2]:Magnitude())
-                args[2]      = dir
-            else
-                -- args = {ray, ignoreList, ...}
-                local ray       = args[1]
-                local origin    = ray.Origin
-                local magnitude = ray.Direction.Magnitude
-                args[1]         = Ray.new(origin, (tgt.Position - origin).Unit * magnitude)
-            end
-            return oldNamecall(self, unpack(args))
-        end
-    end
-
-    return oldNamecall(self, ...)
-end)
 
 -- State
 local RightDown = false
@@ -275,4 +242,4 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-print("haxegon_static loaded: Silent Aim, AimLock, WalkSpeed, InfiniteJump, Noclip, ESP")
+print("haxegon_static loaded: AimLock (RMB), WalkSpeed enforced, InfiniteJump, Noclip, ESP")
