@@ -29,7 +29,7 @@ local Config = {
 -- State
 local RightDown = false
 
--- Track right-mouse button
+-- Track right-click
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightDown = true
@@ -41,7 +41,9 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Helper: valid target?
+-- ─── AIMLOCK SECTION ───────────────────────────────────────────────────
+
+-- Validate a target (alive, not self)
 local function isValid(plr)
     if plr == LocalPlayer then return false end
     local c = plr.Character
@@ -49,20 +51,18 @@ local function isValid(plr)
     return h and h.Health > 0
 end
 
--- Helper: find closest head in FOV
+-- Find closest head within FOV (ignores walls)
 local function getClosestHead()
     local bestHead, bestDist = nil, Config.FOV
     for _, plr in ipairs(Players:GetPlayers()) do
         if isValid(plr) and plr.Character then
-            local head = plr.Character:FindFirstChild("Head")
+            local head = plr.Character:FindFirstChild(Config.AimbotPart)
             if head then
-                local sPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen then
-                    local dist = (Vector2.new(Mouse.X, Mouse.Y)
-                                  - Vector2.new(sPos.X, sPos.Y)).Magnitude
-                    if dist < bestDist then
-                        bestHead, bestDist = head, dist
-                    end
+                local screenPos = Camera:WorldToViewportPoint(head.Position)
+                local dist      = (Vector2.new(Mouse.X, Mouse.Y)
+                                  - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                if dist < bestDist then
+                    bestHead, bestDist = head, dist
                 end
             end
         end
@@ -70,32 +70,32 @@ local function getClosestHead()
     return bestHead
 end
 
--- Main loop: enforce WalkSpeed + aimlock
+-- Enforce WalkSpeed + Aimlock
 RunService.RenderStepped:Connect(function()
-    -- Enforce walkspeed every frame
+    -- Enforce WalkSpeed every frame
     do
         local char = LocalPlayer.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = Config.WalkSpeedValue
-            end
+            if hum then hum.WalkSpeed = Config.WalkSpeedValue end
         end
     end
 
     -- Aimlock
-    local cam = Camera
     if RightDown then
         local head = getClosestHead()
         if head then
-            cam.CameraType = Enum.CameraType.Scriptable
-            cam.CFrame     = CFrame.lookAt(cam.CFrame.Position, head.Position)
+            local screenPos = Camera:WorldToViewportPoint(head.Position)
+            -- Always move mouse, even if behind walls or off-screen
+            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+            local aimPos   = Vector2.new(screenPos.X, screenPos.Y)
+            local delta    = (aimPos - mousePos) * Config.Sensitivity
+            mousemoverel(delta.X, delta.Y)
         end
-    elseif cam.CameraType == Enum.CameraType.Scriptable then
-        cam.CameraType = Enum.CameraType.Custom
     end
 end)
 
+-- ────────────────────────────────────────────────────────────────────────
 
 -- ─── UPDATED ESP & TRACERS ─────────────────────────────────────────────
 
@@ -151,7 +151,7 @@ local function CreateNametag(player, char)
         task.spawn(function()
             while bb.Parent and Config.ShowESP and Config.HPESP do
                 local hum = char:FindFirstChildOfClass("Humanoid")
-                label.Text = string.format("%s | %d HP", player.Name, hum and math.floor(hum.Health) or 0)
+                label.Text = ("%s | %d HP"):format(player.Name, hum and math.floor(hum.Health) or 0)
                 task.wait(0.1)
             end
         end)
@@ -172,7 +172,7 @@ local function RefreshESP()
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             local hum  = char and char:FindFirstChildOfClass("Humanoid")
-            local alive = root and hum and hum.Health > 0
+            local alive= root and hum and hum.Health > 0
             if Config.ShowESP and alive then
                 local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
                 local dist = (root.Position - Camera.CFrame.Position).Magnitude
@@ -222,7 +222,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-
 -- Infinite Jump
 if Config.InfiniteJump then
     UserInputService.JumpRequest:Connect(function()
@@ -255,19 +254,14 @@ local function makeImmortal()
     local char = LocalPlayer.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    hum.MaxHealth = IMMORTAL_HEALTH
-    hum.Health    = IMMORTAL_HEALTH
-
-    hum.Died:Connect(function()
-        hum.Health = IMMORTAL_HEALTH
-    end)
-    hum.HealthChanged:Connect(function(newH)
-        if newH < IMMORTAL_HEALTH then
-            hum.Health = IMMORTAL_HEALTH
-        end
-    end)
+    if hum then
+        hum.MaxHealth = IMMORTAL_HEALTH
+        hum.Health    = IMMORTAL_HEALTH
+        hum.Died:Connect(function() hum.Health = IMMORTAL_HEALTH end)
+        hum.HealthChanged:Connect(function(newH)
+            if newH < IMMORTAL_HEALTH then hum.Health = IMMORTAL_HEALTH end
+        end)
+    end
 end
 
 LocalPlayer.CharacterAdded:Connect(function()
