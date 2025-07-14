@@ -26,7 +26,31 @@ local Config = {
     ESPColor        = Color3.fromRGB(214, 0, 255),
 }
 
--- Helpers
+-- Robust WalkSpeed enforcement
+local function enforceSpeed(humanoid)
+    if not humanoid then return end
+    -- Immediately apply
+    humanoid.WalkSpeed = Config.WalkSpeedValue
+    -- Snap back if anything else tries to change it
+    humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if humanoid.WalkSpeed ~= Config.WalkSpeedValue then
+            humanoid.WalkSpeed = Config.WalkSpeedValue
+        end
+    end)
+end
+
+local function hookCharacter(character)
+    local hum = character:WaitForChild("Humanoid", 5)
+    enforceSpeed(hum)
+end
+
+-- Hook current and future characters
+if LocalPlayer.Character then
+    hookCharacter(LocalPlayer.Character)
+end
+Players.LocalPlayer.CharacterAdded:Connect(hookCharacter)
+
+-- Helpers for aimbot
 local function isValid(plr)
     if plr == LocalPlayer then return false end
     local c = plr.Character
@@ -37,12 +61,13 @@ end
 local function getBestTarget()
     local best, bestMag = nil, Config.FOV
     for _, plr in ipairs(Players:GetPlayers()) do
-        if isValid(plr) then
+        if isValid(plr) and plr.Character then
             local part = plr.Character:FindFirstChild(Config.AimbotPart)
             if part then
                 local sp, on = Camera:WorldToViewportPoint(part.Position)
                 if on then
-                    local d = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(sp.X, sp.Y)).Magnitude
+                    local d = (Vector2.new(Mouse.X, Mouse.Y)
+                              - Vector2.new(sp.X, sp.Y)).Magnitude
                     if d < bestMag then
                         best, bestMag = part, d
                     end
@@ -56,7 +81,7 @@ end
 -- State
 local RightDown = false
 
--- Track right-click
+-- Track right-mouse
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightDown = true
@@ -68,24 +93,16 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Main loop (WalkSpeed + AimLock)
+-- Main loop: AimLock only (WalkSpeed is now event-driven)
 RunService.RenderStepped:Connect(function()
-    -- enforce walk speed
-    do
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum.WalkSpeed = Config.WalkSpeedValue end
-        end
-    end
-
-    -- aim-lock on RMB
     if RightDown then
         local targetPart = getBestTarget()
         if targetPart then
             local sp, on = Camera:WorldToViewportPoint(targetPart.Position)
             if on then
-                local delta = (Vector2.new(sp.X, sp.Y) - Vector2.new(Mouse.X, Mouse.Y)) * Config.Sensitivity
+                local delta = (Vector2.new(sp.X, sp.Y)
+                              - Vector2.new(Mouse.X, Mouse.Y))
+                              * Config.Sensitivity
                 mousemoverel(delta.X, delta.Y)
             end
         end
