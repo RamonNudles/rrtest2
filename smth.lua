@@ -74,7 +74,7 @@ local Mouse       = LocalPlayer:GetMouse()
 -- Settings
 local FOV             = 600      -- max screen-space radius
 local Sensitivity     = 1        -- aim speed multiplier
-local ExtraVertical   = 2        -- studs above the top of the head to aim
+local ExtraVertical   = 5        -- studs above the top of the head to aim
 
 -- State
 local RightDown = false
