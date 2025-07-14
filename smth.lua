@@ -41,10 +41,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Always-on right-click head aimlock (locks onto head at any distance)
--- + frame-by-frame WalkSpeed enforcement
-
--- Cache a function to find the closest valid head
+-- Helper: valid target?
 local function isValid(plr)
     if plr == LocalPlayer then return false end
     local c = plr.Character
@@ -52,16 +49,17 @@ local function isValid(plr)
     return h and h.Health > 0
 end
 
+-- Helper: find closest head in FOV
 local function getClosestHead()
     local bestHead, bestDist = nil, Config.FOV
     for _, plr in ipairs(Players:GetPlayers()) do
         if isValid(plr) and plr.Character then
             local head = plr.Character:FindFirstChild("Head")
             if head then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                local sPos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
                     local dist = (Vector2.new(Mouse.X, Mouse.Y)
-                                  - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                                  - Vector2.new(sPos.X, sPos.Y)).Magnitude
                     if dist < bestDist then
                         bestHead, bestDist = head, dist
                     end
@@ -72,8 +70,9 @@ local function getClosestHead()
     return bestHead
 end
 
+-- Main loop: enforce WalkSpeed + aimlock
 RunService.RenderStepped:Connect(function()
-    -- 1) Enforce WalkSpeed every frame
+    -- Enforce walkspeed every frame
     do
         local char = LocalPlayer.Character
         if char then
@@ -84,7 +83,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- 2) Aimlock
+    -- Aimlock
     local cam = Camera
     if RightDown then
         local head = getClosestHead()
@@ -249,7 +248,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Replace math.huge with a large finite number:
+-- Replace math.huge with a large finite number
 local IMMORTAL_HEALTH = 1e7
 
 local function makeImmortal()
