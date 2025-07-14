@@ -6,11 +6,11 @@ local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera           = workspace.CurrentCamera
 
--- Local player
+-- Local player + mouse
 local LocalPlayer = Players.LocalPlayer
 local Mouse       = LocalPlayer:GetMouse()
 
--- Utility (for Silent Aim)
+-- Utility module & original raycast
 local utility    = require(game:GetService("ReplicatedStorage").Modules.Utility)
 local oldRaycast = utility.Raycast
 
@@ -31,18 +31,60 @@ local Config = {
     ESPColor        = Color3.fromRGB(214, 0, 255),
 }
 
--- Always-on Silent-Aim override
-utility.Raycast = function(origin, destination, filter, maxDist)
-    if Config.SilentAim then
-        local tgt = getBestTarget()
-        if tgt then
-            destination = tgt.Position
-        end
-    end
-    return oldRaycast(origin, destination, filter, maxDist)
+-- Helpers
+local function isValid(plr)
+    if plr == LocalPlayer then return false end
+    local c = plr.Character
+    local h = c and c:FindFirstChildOfClass("Humanoid")
+    return h and h.Health > 0
 end
 
--- Unified Silent-Aim + Aim-Lock
+local function getBestTarget()
+    local best, bestMag = nil, Config.FOV
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if isValid(plr) then
+            local part = plr.Character:FindFirstChild(Config.AimbotPart)
+            if part then
+                local sp, on = Camera:WorldToViewportPoint(part.Position)
+                if on then
+                    local d = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(sp.X, sp.Y)).Magnitude
+                    if d < bestMag then
+                        best, bestMag = part, d
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- Always-on Silent Aim override (metamethod hook)
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args   = {...}
+
+    if Config.SilentAim and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
+        local tgt = getBestTarget()
+        if tgt then
+            if method == "Raycast" then
+                -- args = {origin, direction, params, ...}
+                local origin = args[1]
+                local dir    = (tgt.Position - origin).Unit * (args[2].Magnitude or args[2]:Magnitude())
+                args[2]      = dir
+            else
+                -- args = {ray, ignoreList, ...}
+                local ray       = args[1]
+                local origin    = ray.Origin
+                local magnitude = ray.Direction.Magnitude
+                args[1]         = Ray.new(origin, (tgt.Position - origin).Unit * magnitude)
+            end
+            return oldNamecall(self, unpack(args))
+        end
+    end
+
+    return oldNamecall(self, ...)
+end)
 
 -- State
 local RightDown = false
@@ -59,60 +101,29 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Helpers
-local function isValid(plr)
-    if plr == LocalPlayer then return false end
-    local c = plr.Character
-    local h = c and c:FindFirstChildOfClass("Humanoid")
-    return h and h.Health > 0
-end
-
-local function getBestTarget()
-    local best, bestMag = nil, Config.FOV
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if isValid(plr) then
-            local part = plr.Character and plr.Character:FindFirstChild(Config.AimbotPart)
-            if part then
-                local sp,on = Camera:WorldToViewportPoint(part.Position)
-                if on then
-                    local d = (Vector2.new(Mouse.X,Mouse.Y) - Vector2.new(sp.X,sp.Y)).Magnitude
-                    if d < bestMag then
-                        best, bestMag = part, d
-                    end
-                end
-            end
-        end
-    end
-    return best
-end
-
--- Main loop: enforce WalkSpeed + Aim-Lock
+-- Main loop (WalkSpeed + AimLock)
 RunService.RenderStepped:Connect(function()
-    -- 1) WalkSpeed enforcement
+    -- enforce walk speed
     do
         local char = LocalPlayer.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = Config.WalkSpeedValue
-            end
+            if hum then hum.WalkSpeed = Config.WalkSpeedValue end
         end
     end
 
-    -- 2) Aim-Lock while right-click held
+    -- aim-lock on RMB
     if RightDown then
         local targetPart = getBestTarget()
         if targetPart then
-            local sp,on = Camera:WorldToViewportPoint(targetPart.Position)
+            local sp, on = Camera:WorldToViewportPoint(targetPart.Position)
             if on then
-                local delta = (Vector2.new(sp.X,sp.Y) - Vector2.new(Mouse.X,Mouse.Y)) * Config.Sensitivity
+                local delta = (Vector2.new(sp.X, sp.Y) - Vector2.new(Mouse.X, Mouse.Y)) * Config.Sensitivity
                 mousemoverel(delta.X, delta.Y)
             end
         end
     end
 end)
-
--- ────────────────────────────────────────────────────────────────────────
 
 -- ─── UPDATED ESP & TRACERS ─────────────────────────────────────────────
 
@@ -250,7 +261,7 @@ if Config.InfiniteJump then
     end)
 end
 
--- Noclip loop
+-- Noclip
 RunService.Stepped:Connect(function()
     if Config.Noclip then
         local char = LocalPlayer.Character
@@ -264,4 +275,4 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-print("haxegon_static loaded: ESP, AimLock (RMB skip dead), Silent Aim, WalkSpeed enforced, InfiniteJump, Noclip active, Underground-TP on H")
+print("haxegon_static loaded: Silent Aim, AimLock, WalkSpeed, InfiniteJump, Noclip, ESP")
