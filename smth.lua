@@ -78,22 +78,18 @@ local function hookCharacter(character)
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
 
-        if move.Magnitude > 0 then
-            vel.Velocity = move.Unit * Config.FlySpeed
-        else
-            vel.Velocity = Vector3.zero
-        end
+        vel.Velocity = (move.Magnitude > 0 and move.Unit * Config.FlySpeed) or Vector3.zero
         gyro.CFrame = Camera.CFrame
     end)
 end
 
--- Hook current and future characters
+-- Hook for current and future characters
 if LocalPlayer.Character then
     hookCharacter(LocalPlayer.Character)
 end
 LocalPlayer.CharacterAdded:Connect(hookCharacter)
 
--- ──────────── AimLock Only (no trigger-bot) ────────────
+-- ──────────── AimLock Only ────────────
 
 local RightDown = false
 
@@ -135,6 +131,8 @@ local function getBestTarget()
     return best
 end
 
+-- We smooth out aimlock by only moving the mouse when you hold RMB,
+-- and we don’t reset camera CFrame anywhere else—so your manual input “sticks.”
 RunService.RenderStepped:Connect(function()
     if RightDown then
         local tgt = getBestTarget()
@@ -159,6 +157,7 @@ local function GetTracerOrigin()
     local sz = Camera.ViewportSize
     return Vector2.new(sz.X/2, sz.Y)
 end
+
 local function CreateTracer()
     local line = Drawing.new("Line")
     line.Visible      = false
@@ -167,6 +166,7 @@ local function CreateTracer()
     line.Transparency = 1
     return line
 end
+
 local function CreateHighlight(char)
     if char:FindFirstChild("ESPHighlight") then return end
     local h = Instance.new("Highlight", char)
@@ -175,10 +175,12 @@ local function CreateHighlight(char)
     h.FillTransparency    = Config.ESPTransparency
     h.OutlineTransparency = 1
 end
+
 local function RemoveHighlight(char)
     local h = char and char:FindFirstChild("ESPHighlight")
     if h then h:Destroy() end
 end
+
 local function CreateNametag(plr,char)
     if char:FindFirstChild("ESPNameTag") then return end
     local head = char:FindFirstChild("Head")
@@ -208,6 +210,7 @@ local function CreateNametag(plr,char)
         lbl.Text = plr.Name
     end
 end
+
 local function RemoveNametag(char)
     local bb = char and char:FindFirstChild("ESPNameTag")
     if bb then bb:Destroy() end
@@ -308,7 +311,7 @@ local function teleportBehind()
     for nm, _ in pairs(seen) do
         local pl = Players:FindFirstChild(nm)
         if pl
-        and pl.Team ~= LocalPlayer.Team
+        and pl.Team ~= LocalPlayer.Team      -- avoid teammates
         and pl.Character
         and pl.Character:FindFirstChild("HumanoidRootPart")
         and pl.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
@@ -316,13 +319,13 @@ local function teleportBehind()
             local hrpE = pl.Character.HumanoidRootPart
             local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if myHRP then
-                local backCFrame = CFrame.new(
+                -- 3 studs directly behind, no vertical offset
+                myHRP.CFrame = CFrame.new(
                     hrpE.Position - hrpE.CFrame.LookVector * 3,
                     hrpE.Position
                 )
-                myHRP.CFrame = backCFrame
             end
-            break
+            break  -- only the first valid enemy
         end
     end
 end
