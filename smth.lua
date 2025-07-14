@@ -1,11 +1,11 @@
 queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/RamonNudles/rrtest2/refs/heads/index/smth.lua"))()')
 
 -- Services
-local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
-local UserInputService  = game:GetService("UserInputService")
-local Camera            = workspace.CurrentCamera
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players            = game:GetService("Players")
+local RunService         = game:GetService("RunService")
+local UserInputService   = game:GetService("UserInputService")
+local Camera             = workspace.CurrentCamera
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 
 -- Local player + mouse
 local LocalPlayer = Players.LocalPlayer
@@ -23,6 +23,7 @@ local Config = {
     ShowNameTags    = true,
     HPESP           = true,
     ESPTransparency = 0.5,
+    BlinkingESP     = false,
     ESPColor        = Color3.fromRGB(214, 0, 255),
 }
 
@@ -92,9 +93,10 @@ if LocalPlayer.Character then
 end
 LocalPlayer.CharacterAdded:Connect(hookCharacter)
 
--- ──────────── AimLock ────────────
+-- ──────────── AimLock Only (no trigger-bot) ────────────
 
 local RightDown = false
+
 UserInputService.InputBegan:Connect(function(inp, processed)
     if not processed and inp.UserInputType == Enum.UserInputType.MouseButton2 then
         RightDown = true
@@ -121,7 +123,8 @@ local function getBestTarget()
             if part then
                 local sp, on = Camera:WorldToViewportPoint(part.Position)
                 if on then
-                    local d = (Vector2.new(Mouse.X,Mouse.Y) - Vector2.new(sp.X,sp.Y)).Magnitude
+                    local d = (Vector2.new(Mouse.X,Mouse.Y)
+                              - Vector2.new(sp.X,sp.Y)).Magnitude
                     if d < bestDist then
                         best, bestDist = part, d
                     end
@@ -138,7 +141,9 @@ RunService.RenderStepped:Connect(function()
         if tgt then
             local sp, on = Camera:WorldToViewportPoint(tgt.Position)
             if on then
-                local delta = (Vector2.new(sp.X,sp.Y) - Vector2.new(Mouse.X,Mouse.Y)) * Config.Sensitivity
+                local delta = (Vector2.new(sp.X,sp.Y)
+                              - Vector2.new(Mouse.X,Mouse.Y))
+                              * Config.Sensitivity
                 mousemoverel(delta.X, delta.Y)
             end
         end
@@ -154,7 +159,6 @@ local function GetTracerOrigin()
     local sz = Camera.ViewportSize
     return Vector2.new(sz.X/2, sz.Y)
 end
-
 local function CreateTracer()
     local line = Drawing.new("Line")
     line.Visible      = false
@@ -163,7 +167,6 @@ local function CreateTracer()
     line.Transparency = 1
     return line
 end
-
 local function CreateHighlight(char)
     if char:FindFirstChild("ESPHighlight") then return end
     local h = Instance.new("Highlight", char)
@@ -172,23 +175,21 @@ local function CreateHighlight(char)
     h.FillTransparency    = Config.ESPTransparency
     h.OutlineTransparency = 1
 end
-
 local function RemoveHighlight(char)
     local h = char and char:FindFirstChild("ESPHighlight")
     if h then h:Destroy() end
 end
-
-local function CreateNametag(plr, char)
+local function CreateNametag(plr,char)
     if char:FindFirstChild("ESPNameTag") then return end
     local head = char:FindFirstChild("Head")
     if not head then return end
-    local bb = Instance.new("BillboardGui", char)
+    local bb = Instance.new("BillboardGui",char)
     bb.Name        = "ESPNameTag"
     bb.Adornee     = head
     bb.Size        = UDim2.new(0,100,0,20)
     bb.StudsOffset = Vector3.new(0,2.5,0)
     bb.AlwaysOnTop = true
-    local lbl = Instance.new("TextLabel", bb)
+    local lbl = Instance.new("TextLabel",bb)
     lbl.Size                   = UDim2.fromScale(1,1)
     lbl.BackgroundTransparency = 1
     lbl.Font                   = Enum.Font.SourceSansBold
@@ -207,7 +208,6 @@ local function CreateNametag(plr, char)
         lbl.Text = plr.Name
     end
 end
-
 local function RemoveNametag(char)
     local bb = char and char:FindFirstChild("ESPNameTag")
     if bb then bb:Destroy() end
@@ -222,7 +222,7 @@ local function RefreshESP()
             local hum  = char and char:FindFirstChildOfClass("Humanoid")
             local alive= root and hum and hum.Health > 0
             if Config.ShowESP and alive then
-                local pos, on = Camera:WorldToViewportPoint(root.Position)
+                local pos,on = Camera:WorldToViewportPoint(root.Position)
                 local dist = (root.Position - Camera.CFrame.Position).Magnitude
                 if on and dist < MAX_TRACER_DISTANCE then
                     local t = Tracers[plr] or CreateTracer()
@@ -234,7 +234,7 @@ local function RefreshESP()
                     Tracers[plr].Visible = false
                 end
                 CreateHighlight(char)
-                if Config.ShowNameTags then CreateNametag(plr, char) end
+                if Config.ShowNameTags then CreateNametag(plr,char) end
             else
                 if Tracers[plr] then Tracers[plr].Visible = false end
                 RemoveHighlight(char)
@@ -245,8 +245,8 @@ local function RefreshESP()
 end
 
 local function ClearAllESP()
-    for p, t in pairs(Tracers) do t:Remove() end
-    for _, plr in ipairs(Players:GetPlayers()) do
+    for p,t in pairs(Tracers) do t:Remove() end
+    for _,plr in ipairs(Players:GetPlayers()) do
         if plr.Character then
             RemoveHighlight(plr.Character)
             RemoveNametag(plr.Character)
@@ -270,7 +270,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Noclip loop
+-- Noclip
 RunService.Stepped:Connect(function()
     if Config.Noclip then
         local char = LocalPlayer.Character
@@ -294,34 +294,46 @@ UserInputService.InputBegan:Connect(function(inp, processed)
     end
 end)
 
+local function teleportBehind()
+    local models = ReplicatedStorage.Assets.Temp.ViewModels:GetChildren()
+    local seen   = {}
+
+    for _, m in ipairs(models) do
+        local nm = m.Name:gsub(" %- .*","")
+        if nm ~= LocalPlayer.Name then
+            seen[nm] = true
+        end
+    end
+
+    for nm, _ in pairs(seen) do
+        local pl = Players:FindFirstChild(nm)
+        if pl
+        and pl.Team ~= LocalPlayer.Team
+        and pl.Character
+        and pl.Character:FindFirstChild("HumanoidRootPart")
+        and pl.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+
+            local hrpE = pl.Character.HumanoidRootPart
+            local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if myHRP then
+                local backCFrame = CFrame.new(
+                    hrpE.Position - hrpE.CFrame.LookVector * 3,
+                    hrpE.Position
+                )
+                myHRP.CFrame = backCFrame
+            end
+            break
+        end
+    end
+end
+
 spawn(function()
     while true do
         if behindToggle then
-            local models = ReplicatedStorage.Assets.Temp.ViewModels:GetChildren()
-            local seen   = {}
-            for _, m in ipairs(models) do
-                local nm = m.Name:gsub(" %- .*","")
-                if nm ~= LocalPlayer.Name then
-                    seen[nm] = true
-                end
-            end
-            for nm, _ in pairs(seen) do
-                local pl = Players:FindFirstChild(nm)
-                if pl and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrpE = pl.Character.HumanoidRootPart
-                    if pl.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
-                        local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if myHRP then
-                            local back = hrpE.Position - hrpE.CFrame.LookVector * 3
-                            myHRP.CFrame = CFrame.new(back, hrpE.Position)
-                        end
-                    end
-                end
-                break
-            end
+            teleportBehind()
         end
         task.wait(0.01)
     end
 end)
 
-print("haxegon_static loaded: AimLock, WalkSpeed, Fly always on, Noclip, ESP, Teleport-Behind [O]")
+print("haxegon_static loaded: AimLock, WalkSpeed enforced, Fly always ON, Noclip, ESP, Teleport-Behind [O]")  
