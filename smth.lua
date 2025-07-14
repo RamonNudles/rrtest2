@@ -69,12 +69,11 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Always-on right-click head aimlock (aims above the head)
+-- Always-on right-click head aimlock (real head position)
 
 -- Settings
-local FOV             = 600      -- max screen-space radius
-local Sensitivity     = 1        -- aim speed multiplier
-local ExtraVertical   = 3        -- studs above the top of the head to aim
+local FOV         = 600    -- max screen-space radius
+local Sensitivity = 1      -- aim speed multiplier
 
 -- Validate a target player
 local function isValid(plr)
@@ -112,10 +111,8 @@ RunService.RenderStepped:Connect(function()
     local head = getClosestHead()
     if not head then return end
 
-    -- compute a point above the top of the head using head's CFrame
-    local topCFrame = head.CFrame * CFrame.new(0, head.Size.Y/2 + ExtraVertical, 0)
-    local worldPos  = topCFrame.Position
-    local screenPos, onScreen = Camera:WorldToViewportPoint(worldPos)
+    -- use exact head.Position so it scales correctly at any distance
+    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
     if not onScreen or screenPos.Z < 0 then return end
 
     local mousePos = Vector2.new(Mouse.X, Mouse.Y)
@@ -271,14 +268,12 @@ local function getClosestPart()
     return closestPart
 end
 
--- Aim lock on right-click (skips dead) — now uses same above-head logic
+-- Aim lock on right-click (skips dead) — now uses head.Position
 RunService.RenderStepped:Connect(function()
     if RightDown then
         local head = getClosestPart()
         if head then
-            local topCFrame = head.CFrame * CFrame.new(0, head.Size.Y/2 + ExtraVertical, 0)
-            local worldPos  = topCFrame.Position
-            local screenPos, onScreen = Camera:WorldToViewportPoint(worldPos)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
             if screenPos.Z > 0 then
                 local delta = (Vector2.new(screenPos.X, screenPos.Y)
                             - Vector2.new(Mouse.X, Mouse.Y))
