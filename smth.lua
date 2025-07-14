@@ -5,6 +5,7 @@ local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera           = workspace.CurrentCamera
+local VirtualUser      = game:GetService("VirtualUser")
 
 -- Local player + mouse
 local LocalPlayer = Players.LocalPlayer
@@ -29,9 +30,7 @@ local Config = {
 -- Robust WalkSpeed enforcement
 local function enforceSpeed(humanoid)
     if not humanoid then return end
-    -- Immediately apply
     humanoid.WalkSpeed = Config.WalkSpeedValue
-    -- Snap back if anything else tries to change it
     humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
         if humanoid.WalkSpeed ~= Config.WalkSpeedValue then
             humanoid.WalkSpeed = Config.WalkSpeedValue
@@ -48,9 +47,9 @@ end
 if LocalPlayer.Character then
     hookCharacter(LocalPlayer.Character)
 end
-Players.LocalPlayer.CharacterAdded:Connect(hookCharacter)
+LocalPlayer.CharacterAdded:Connect(hookCharacter)
 
--- Helpers for aimbot
+-- Helpers for aimbot & trigger
 local function isValid(plr)
     if plr == LocalPlayer then return false end
     local c = plr.Character
@@ -85,6 +84,8 @@ local RightDown = false
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightDown = true
+        -- ensure VirtualUser is capturing to allow click simulation
+        VirtualUser:CaptureController()
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
@@ -93,11 +94,12 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Main loop: AimLock only (WalkSpeed is now event-driven)
+-- Main loop: AimLock + TriggerBot
 RunService.RenderStepped:Connect(function()
     if RightDown then
         local targetPart = getBestTarget()
         if targetPart then
+            -- Aim-lock movement
             local sp, on = Camera:WorldToViewportPoint(targetPart.Position)
             if on then
                 local delta = (Vector2.new(sp.X, sp.Y)
@@ -105,6 +107,9 @@ RunService.RenderStepped:Connect(function()
                               * Config.Sensitivity
                 mousemoverel(delta.X, delta.Y)
             end
+            -- TriggerBot: simulate left-click
+            VirtualUser:Button1Down(Enum.UserInputType.MouseButton1)
+            VirtualUser:Button1Up(Enum.UserInputType.MouseButton1)
         end
     end
 end)
@@ -259,4 +264,4 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-print("haxegon_static loaded: AimLock (RMB), WalkSpeed enforced, InfiniteJump, Noclip, ESP")
+print("haxegon_static loaded: AimLock+TriggerBot (RMB), WalkSpeed enforced, InfiniteJump, Noclip, ESP")
