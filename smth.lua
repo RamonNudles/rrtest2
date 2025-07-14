@@ -26,6 +26,8 @@ local Config = {
     ESPColor        = Color3.fromRGB(214, 0, 255),
 }
 
+-- Unified Silent-Aim + Aim-Lock
+
 -- State
 local RightDown = false
 
@@ -41,59 +43,58 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- ─── AIMLOCK SECTION ───────────────────────────────────────────────────
-
--- Validate a target (alive, not self)
+-- Helpers
 local function isValid(plr)
     if plr == LocalPlayer then return false end
-    local c = plr.Character
-    local h = c and c:FindFirstChildOfClass("Humanoid")
-    return h and h.Health > 0
+    local c,h = plr.Character, plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+    return h and h.Health>0
 end
 
--- Find closest head within FOV (ignores walls)
-local function getClosestHead()
-    local bestHead, bestDist = nil, Config.FOV
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if isValid(plr) and plr.Character then
-            local head = plr.Character:FindFirstChild(Config.AimbotPart)
-            if head then
-                local screenPos = Camera:WorldToViewportPoint(head.Position)
-                local dist      = (Vector2.new(Mouse.X, Mouse.Y)
-                                  - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                if dist < bestDist then
-                    bestHead, bestDist = head, dist
+local function getBestTarget()
+    local best, bestMag = nil, Config.FOV
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if isValid(plr) then
+            local part = plr.Character:FindFirstChild(Config.AimbotPart)
+            if part then
+                local sp,on = Camera:WorldToViewportPoint(part.Position)
+                if on then
+                    local d = (Vector2.new(Mouse.X,Mouse.Y)-Vector2.new(sp.X,sp.Y)).Magnitude
+                    if d<bestMag then
+                        best, bestMag = part, d
+                    end
                 end
             end
         end
     end
-    return bestHead
+    return best
 end
 
--- Enforce WalkSpeed + Aimlock
+-- Hook both systems in one loop
 RunService.RenderStepped:Connect(function()
-    -- Enforce WalkSpeed every frame
-    do
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum.WalkSpeed = Config.WalkSpeedValue end
+    -- 1) Aim-lock (cursor follow)
+    if RightDown then
+        local targetPart = getBestTarget()
+        if targetPart then
+            local sp,on = Camera:WorldToViewportPoint(targetPart.Position)
+            if on then
+                local delta = (Vector2.new(sp.X,sp.Y)-Vector2.new(Mouse.X,Mouse.Y))*Config.Sensitivity
+                mousemoverel(delta.X,delta.Y)
+            end
         end
     end
 
-    -- Aimlock
-    if RightDown then
-        local head = getClosestHead()
-        if head then
-            local screenPos = Camera:WorldToViewportPoint(head.Position)
-            -- Always move mouse, even if behind walls or off-screen
-            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-            local aimPos   = Vector2.new(screenPos.X, screenPos.Y)
-            local delta    = (aimPos - mousePos) * Config.Sensitivity
-            mousemoverel(delta.X, delta.Y)
+    -- 2) Silent-Aim (raycast override)
+    utility.Raycast = function(origin, destination, filter, maxDist)
+        if Config.SilentAim then
+            local tgt = getBestTarget()
+            if tgt then
+                destination = tgt.Position
+            end
         end
+        return oldRaycast(origin, destination, filter, maxDist)
     end
 end)
+
 
 -- ────────────────────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ local function CreateNametag(player, char)
         task.spawn(function()
             while bb.Parent and Config.ShowESP and Config.HPESP do
                 local hum = char:FindFirstChildOfClass("Humanoid")
-                label.Text = ("%s | %d HP"):format(player.Name, hum and math.floor(hum.Health) or 0)
+                label.Text = ("%d HP"):format(hum and math.floor(hum.Health) or 0)
                 task.wait(0.1)
             end
         end)
