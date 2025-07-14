@@ -24,8 +24,8 @@ local Config = {
     BlinkingESP     = false,
     ESPColor        = Color3.fromRGB(214, 0, 255),
 
-    Fly             = false,    -- added fly toggle
-    FlySpeed        = 100,      -- fly movement speed
+    Fly             = true,     -- now default ON
+    FlySpeed        = 80,       -- slower, more controllable
 }
 
 -- Robust WalkSpeed enforcement
@@ -95,19 +95,21 @@ end)
 
 -- Fly toggle on H
 local flyConnection
-local function toggleFly()
-    Config.Fly = not Config.Fly
+local function toggleFly(forceState)
+    -- allow forced state (for initial ON)
+    Config.Fly = (forceState ~= nil) and forceState or not Config.Fly
 
     local character = LocalPlayer.Character
     if not character then return end
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    if Config.Fly then
-        -- remove old if exists
-        if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
-        if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+    -- cleanup existing controllers
+    if flyConnection then flyConnection:Disconnect() end
+    if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+    if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
 
+    if Config.Fly then
         local gyro = Instance.new("BodyGyro")
         gyro.Name       = "FlyGyro"
         gyro.MaxTorque  = Vector3.new(1,1,1) * math.huge
@@ -122,13 +124,18 @@ local function toggleFly()
         vel.Velocity    = Vector3.zero
         vel.Parent      = hrp
 
-        -- update velocity each frame
         flyConnection = RunService.RenderStepped:Connect(function()
+            -- don't fly if typing
+            if UserInputService:GetFocusedTextBox() then
+                vel.Velocity = Vector3.zero
+                return
+            end
+
             if not Config.Fly or not hrp.Parent then
                 -- cleanup
-                if flyConnection then flyConnection:Disconnect() end
-                if gyro       then gyro:Destroy() end
-                if vel        then vel:Destroy() end
+                flyConnection:Disconnect()
+                gyro:Destroy()
+                vel:Destroy()
                 return
             end
 
@@ -152,14 +159,13 @@ local function toggleFly()
                 move -= Vector3.new(0,1,0)
             end
 
-            vel.Velocity = (move.Magnitude > 0 and move.Unit * Config.FlySpeed) or Vector3.zero
+            if move.Magnitude > 0 then
+                vel.Velocity = move.Unit * Config.FlySpeed
+            else
+                vel.Velocity = Vector3.zero
+            end
             gyro.CFrame  = Camera.CFrame
         end)
-    else
-        -- turn off fly: remove parts
-        if flyConnection then flyConnection:Disconnect() end
-        if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
-        if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
     end
 end
 
@@ -169,6 +175,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
         toggleFly()
     end
 end)
+
+-- Start with fly ON
+toggleFly(true)
 
 -- Main loop: AimLock + TriggerBot
 RunService.RenderStepped:Connect(function()
@@ -184,7 +193,7 @@ RunService.RenderStepped:Connect(function()
                 mousemoverel(delta.X, delta.Y)
             end
 
-            -- TriggerBot: simulate left-click at target
+            -- TriggerBot: simulate left-click at screen coords
             if on then
                 UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, true,  game, 1)
                 UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, false, game, 1)
@@ -332,4 +341,4 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-print("haxegon_static loaded: AimLock+TriggerBot (RMB), WalkSpeed enforced, Fly(toggle H), Noclip, ESP")
+print("haxegon_static loaded: AimLock+TriggerBot (RMB), WalkSpeed enforced, Fly(toggle H) ON, Noclip, ESP")
