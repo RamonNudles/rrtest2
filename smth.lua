@@ -16,7 +16,6 @@ local Config = {
     FOV             = 600,
     Sensitivity     = 1,
     WalkSpeedValue  = 50,
-    InfiniteJump    = true,
     Noclip          = true,
     ShowESP         = true,
     ShowNameTags    = true,
@@ -24,6 +23,9 @@ local Config = {
     ESPTransparency = 0.5,
     BlinkingESP     = false,
     ESPColor        = Color3.fromRGB(214, 0, 255),
+
+    Fly             = false,    -- added fly toggle
+    FlySpeed        = 100,      -- fly movement speed
 }
 
 -- Robust WalkSpeed enforcement
@@ -91,6 +93,83 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
+-- Fly toggle on H
+local flyConnection
+local function toggleFly()
+    Config.Fly = not Config.Fly
+
+    local character = LocalPlayer.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    if Config.Fly then
+        -- remove old if exists
+        if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+        if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+
+        local gyro = Instance.new("BodyGyro")
+        gyro.Name       = "FlyGyro"
+        gyro.MaxTorque  = Vector3.new(1,1,1) * math.huge
+        gyro.P          = 100000
+        gyro.CFrame     = hrp.CFrame
+        gyro.Parent     = hrp
+
+        local vel = Instance.new("BodyVelocity")
+        vel.Name        = "FlyVelocity"
+        vel.MaxForce    = Vector3.new(1,1,1) * math.huge
+        vel.P           = 10000
+        vel.Velocity    = Vector3.zero
+        vel.Parent      = hrp
+
+        -- update velocity each frame
+        flyConnection = RunService.RenderStepped:Connect(function()
+            if not Config.Fly or not hrp.Parent then
+                -- cleanup
+                if flyConnection then flyConnection:Disconnect() end
+                if gyro       then gyro:Destroy() end
+                if vel        then vel:Destroy() end
+                return
+            end
+
+            local move = Vector3.zero
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                move += Camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                move -= Camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                move -= Camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                move += Camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                move += Vector3.new(0,1,0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                move -= Vector3.new(0,1,0)
+            end
+
+            vel.Velocity = (move.Magnitude > 0 and move.Unit * Config.FlySpeed) or Vector3.zero
+            gyro.CFrame  = Camera.CFrame
+        end)
+    else
+        -- turn off fly: remove parts
+        if flyConnection then flyConnection:Disconnect() end
+        if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+        if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+    end
+end
+
+-- Listen for H key
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == Enum.KeyCode.H then
+        toggleFly()
+    end
+end)
+
 -- Main loop: AimLock + TriggerBot
 RunService.RenderStepped:Connect(function()
     if RightDown then
@@ -105,12 +184,10 @@ RunService.RenderStepped:Connect(function()
                 mousemoverel(delta.X, delta.Y)
             end
 
-            -- TriggerBot: simulate left-click at the target's screen point
+            -- TriggerBot: simulate left-click at target
             if on then
-                UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, true,  -- press
-                                                      game, 1)
-                UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, false, -- release
-                                                      game, 1)
+                UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, true,  game, 1)
+                UserInputService:SendMouseButtonEvent(sp.X, sp.Y, 0, false, game, 1)
             end
         end
     end
@@ -241,18 +318,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Infinite Jump
-if Config.InfiniteJump then
-    UserInputService.JumpRequest:Connect(function()
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-        end
-    end)
-end
-
--- Noclip
+-- Noclip loop
 RunService.Stepped:Connect(function()
     if Config.Noclip then
         local char = LocalPlayer.Character
@@ -266,4 +332,4 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-print("haxegon_static loaded: AimLock+TriggerBot (RMB), WalkSpeed enforced, InfiniteJump, Noclip, ESP")
+print("haxegon_static loaded: AimLock+TriggerBot (RMB), WalkSpeed enforced, Fly(toggle H), Noclip, ESP")
