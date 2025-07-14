@@ -58,27 +58,65 @@ queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Ra
 	-- State
 	local RightDown = false
 
-	-- Input handlers for right-click aimlock
+	-- Track right-mouse button
+	-- Track right-mouse button
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
 			RightDown = true
-		end
-		if not processed and input.KeyCode == Enum.KeyCode.H then
-			local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-			if root then
-				holdingH = true
-				hoverY   = root.Position.Y
-			end
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton2 then
 			RightDown = false
 		end
-		if input.KeyCode == Enum.KeyCode.H then
-			holdingH = false
-			hoverY   = nil
+	end)
+
+	-- Validate a target player
+	local function isValid(plr)
+		if plr == LocalPlayer then return false end
+		local c = plr.Character
+		local h = c and c:FindFirstChildOfClass("Humanoid")
+		return h and h.Health > 0
+	end
+
+	-- Return the closest head within FOV
+	local function getClosestHead()
+		local bestHead, bestDist = nil, FOV
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if isValid(plr) and plr.Character then
+				local head = plr.Character:FindFirstChild("Head")
+				if head then
+					local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+					if onScreen then
+						local dist = (Vector2.new(Mouse.X, Mouse.Y)
+									- Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+						if dist < bestDist then
+							bestHead, bestDist = head, dist
+						end
+					end
+				end
+			end
 		end
+		return bestHead
+	end
+
+	-- Aimlock loop
+	RunService.RenderStepped:Connect(function()
+		if not RightDown then return end
+
+		local head = getClosestHead()
+		if not head then return end
+
+		-- aim at top of head
+		local topPos = head.Position + Vector3.new(0, head.Size.Y/2, 0)
+		local screenPos, onScreen = Camera:WorldToViewportPoint(topPos)
+		if not onScreen or screenPos.Z < 0 then return end
+
+		local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+		local aimPos   = Vector2.new(screenPos.X, screenPos.Y)
+		local delta    = (aimPos - mousePos) * Sensitivity
+
+		mousemoverel(delta.X, delta.Y)
 	end)
 
 	-- ─── UPDATED ESP & TRACERS ─────────────────────────────────────────────
