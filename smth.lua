@@ -26,34 +26,6 @@ local Config = {
     ESPColor        = Color3.fromRGB(214, 0, 255),
 }
 
--- Holds our walk-speed change connections
-local HumanModCons = { ws = nil, wsCA = nil }
-
--- Sets up continuous enforcement of WalkSpeed
-local function startLoopSpeed()
-    local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
-    if not h then return end
-    local function apply() if h then h.WalkSpeed = Config.WalkSpeedValue end end
-    apply()
-    if HumanModCons.ws then HumanModCons.ws:Disconnect() end
-    HumanModCons.ws = h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
-    if HumanModCons.wsCA then HumanModCons.wsCA:Disconnect() end
-    HumanModCons.wsCA = Players.LocalPlayer.CharacterAdded:Connect(function(character)
-        h = character:WaitForChild("Humanoid", 5)
-        apply()
-        if HumanModCons.ws then HumanModCons.ws:Disconnect() end
-        HumanModCons.ws = h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
-    end)
-end
-
--- Stops enforcing and resets to default speed
-local function stopLoopSpeed()
-    if HumanModCons.ws then HumanModCons.ws:Disconnect() HumanModCons.ws = nil end
-    if HumanModCons.wsCA then HumanModCons.wsCA:Disconnect() HumanModCons.wsCA = nil end
-    local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
-    if h then h.WalkSpeed = 25.2 end
-end
-
 -- State
 local RightDown = false
 
@@ -69,13 +41,10 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Always-on right-click head aimlock (real head position)
+-- Always-on right-click head aimlock (locks onto head at any distance)
+-- + frame-by-frame WalkSpeed enforcement
 
--- Settings
-local FOV         = 600    -- max screen-space radius
-local Sensitivity = 1      -- aim speed multiplier
-
--- Validate a target player
+-- Cache a function to find the closest valid head
 local function isValid(plr)
     if plr == LocalPlayer then return false end
     local c = plr.Character
@@ -83,9 +52,8 @@ local function isValid(plr)
     return h and h.Health > 0
 end
 
--- Return the closest head within FOV
 local function getClosestHead()
-    local bestHead, bestDist = nil, FOV
+    local bestHead, bestDist = nil, Config.FOV
     for _, plr in ipairs(Players:GetPlayers()) do
         if isValid(plr) and plr.Character then
             local head = plr.Character:FindFirstChild("Head")
@@ -104,23 +72,31 @@ local function getClosestHead()
     return bestHead
 end
 
--- Aimlock loop
 RunService.RenderStepped:Connect(function()
-    if not RightDown then return end
+    -- 1) Enforce WalkSpeed every frame
+    do
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = Config.WalkSpeedValue
+            end
+        end
+    end
 
-    local head = getClosestHead()
-    if not head then return end
-
-    -- use exact head.Position so it scales correctly at any distance
-    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-    if not onScreen or screenPos.Z < 0 then return end
-
-    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-    local aimPos   = Vector2.new(screenPos.X, screenPos.Y)
-    local delta    = (aimPos - mousePos) * Sensitivity
-
-    mousemoverel(delta.X, delta.Y)
+    -- 2) Aimlock
+    local cam = Camera
+    if RightDown then
+        local head = getClosestHead()
+        if head then
+            cam.CameraType = Enum.CameraType.Scriptable
+            cam.CFrame     = CFrame.lookAt(cam.CFrame.Position, head.Position)
+        end
+    elseif cam.CameraType == Enum.CameraType.Scriptable then
+        cam.CameraType = Enum.CameraType.Custom
+    end
 end)
+
 
 -- ─── UPDATED ESP & TRACERS ─────────────────────────────────────────────
 
@@ -144,9 +120,9 @@ end
 local function CreateHighlight(char)
     if char:FindFirstChild("ESPHighlight") then return end
     local h = Instance.new("Highlight", char)
-    h.Name               = "ESPHighlight"
-    h.FillColor          = Config.ESPColor
-    h.FillTransparency   = Config.ESPTransparency
+    h.Name                = "ESPHighlight"
+    h.FillColor           = Config.ESPColor
+    h.FillTransparency    = Config.ESPTransparency
     h.OutlineTransparency = 1
 end
 
@@ -247,42 +223,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Aimbot helpers (skip dead and teammates)
-local function getClosestPart()
-    local closestPart, shortest = nil, Config.FOV
-    for _, pl in ipairs(Players:GetPlayers()) do
-        if pl ~= LocalPlayer and pl.Character then
-            local head = pl.Character:FindFirstChild("Head")
-            local hum  = pl.Character:FindFirstChildOfClass("Humanoid")
-            if head and hum and hum.Health > 0 then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                    if dist < shortest then
-                        closestPart, shortest = head, dist
-                    end
-                end
-            end
-        end
-    end
-    return closestPart
-end
-
--- Aim lock on right-click (skips dead) — now uses head.Position
-RunService.RenderStepped:Connect(function()
-    if RightDown then
-        local head = getClosestPart()
-        if head then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if screenPos.Z > 0 then
-                local delta = (Vector2.new(screenPos.X, screenPos.Y)
-                            - Vector2.new(Mouse.X, Mouse.Y))
-                            * Config.Sensitivity
-                mousemoverel(delta.X, delta.Y)
-            end
-        end
-    end
-end)
 
 -- Infinite Jump
 if Config.InfiniteJump then
@@ -309,10 +249,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Start enforcing speed hack
-startLoopSpeed()
-
--- Replace math.huge with a large finite number
+-- Replace math.huge with a large finite number:
 local IMMORTAL_HEALTH = 1e7
 
 local function makeImmortal()
@@ -340,4 +277,4 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 makeImmortal()
 
-print("haxegon_static loaded: ESP, AimLock (RMB skip dead), WalkSpeed (hooked), InfiniteJump, Noclip active, Underground-TP on H")
+print("haxegon_static loaded: ESP, AimLock (RMB skip dead), WalkSpeed enforced, InfiniteJump, Noclip active, Underground-TP on H")
