@@ -1,11 +1,11 @@
 queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/RamonNudles/rrtest2/refs/heads/index/smth.lua"))()')
 
 -- Services
-local Players            = game:GetService("Players")
-local RunService         = game:GetService("RunService")
-local UserInputService   = game:GetService("UserInputService")
-local Camera             = workspace.CurrentCamera
-local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local Camera            = workspace.CurrentCamera
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Local player + mouse
 local LocalPlayer = Players.LocalPlayer
@@ -27,8 +27,7 @@ local Config = {
     ESPColor        = Color3.fromRGB(214, 0, 255),
 }
 
--- ─── WalkSpeed Enforcement & Permanent Fly ─────────────────────────────────
-
+-- ─── WalkSpeed Enforcement & Permanent Fly ───────────────────────────────
 local function enforceSpeed(h)
     if not h then return end
     h.WalkSpeed = Config.WalkSpeedValue
@@ -40,22 +39,26 @@ local function enforceSpeed(h)
 end
 
 local function hookCharacter(char)
-    local h = char:WaitForChild("Humanoid", 5)
+    local h   = char:WaitForChild("Humanoid", 5)
+    local hrp = char:WaitForChild("HumanoidRootPart", 5)
     enforceSpeed(h)
 
-    local hrp = char:WaitForChild("HumanoidRootPart", 5)
-    if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
-    if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+    -- Clean up old fly parts
+    for _, name in ipairs({"FlyGyro", "FlyVelocity"}) do
+        if hrp:FindFirstChild(name) then hrp[name]:Destroy() end
+    end
 
+    -- BodyGyro
     local gyro = Instance.new("BodyGyro", hrp)
     gyro.Name      = "FlyGyro"
     gyro.MaxTorque = Vector3.new(1,1,1) * math.huge
-    gyro.P         = 100000
+    gyro.P         = 1e5
 
+    -- BodyVelocity
     local vel = Instance.new("BodyVelocity", hrp)
     vel.Name       = "FlyVelocity"
     vel.MaxForce   = Vector3.new(1,1,1) * math.huge
-    vel.P          = 10000
+    vel.P          = 1e4
     vel.Velocity   = Vector3.zero
 
     RunService.RenderStepped:Connect(function()
@@ -70,7 +73,7 @@ local function hookCharacter(char)
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir -= Camera.CFrame.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir -= Camera.CFrame.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir += Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0,1,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space)     then dir += Vector3.new(0,1,0) end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.new(0,1,0) end
 
         vel.Velocity = (dir.Magnitude > 0 and dir.Unit * Config.FlySpeed) or Vector3.zero
@@ -78,20 +81,17 @@ local function hookCharacter(char)
     end)
 end
 
-if LocalPlayer.Character then
-    hookCharacter(LocalPlayer.Character)
-end
+if LocalPlayer.Character then hookCharacter(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(hookCharacter)
 
--- ─── AimLock Only ──────────────────────────────────────────────────────────
-
-local RightDown = false
+-- ─── AimLock Only ─────────────────────────────────────────────────────────
 local behindToggle = false
+local RightDown    = false
 
 UserInputService.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton2 then
         RightDown = true
-    elseif i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == Enum.KeyCode.O then
+    elseif i.KeyCode == Enum.KeyCode.O then
         behindToggle = not behindToggle
     end
 end)
@@ -111,7 +111,7 @@ end
 local function getBestTarget()
     local best, bestDist = nil, Config.FOV
     for _, p in ipairs(Players:GetPlayers()) do
-        if isValid(p) and p.Character then
+        if isValid(p) and p.Team ~= LocalPlayer.Team then
             local part = p.Character:FindFirstChild(Config.AimbotPart)
             if part then
                 local sp,on = Camera:WorldToViewportPoint(part.Position)
@@ -133,15 +133,14 @@ RunService.RenderStepped:Connect(function()
         if t then
             local sp,on = Camera:WorldToViewportPoint(t.Position)
             if on then
-                local d = (Vector2.new(sp.X,sp.Y) - Vector2.new(Mouse.X,Mouse.Y)) * Config.Sensitivity
-                mousemoverel(d.X, d.Y)
+                local delta = (Vector2.new(sp.X,sp.Y) - Vector2.new(Mouse.X,Mouse.Y)) * Config.Sensitivity
+                mousemoverel(delta.X, delta.Y)
             end
         end
     end
 end)
 
 -- ─── ESP & Tracers & Noclip ───────────────────────────────────────────────
-
 local Tracers             = {}
 local MAX_TRACER_DISTANCE = 1200
 
@@ -149,7 +148,6 @@ local function GetTracerOrigin()
     local v = Camera.ViewportSize
     return Vector2.new(v.X/2, v.Y)
 end
-
 local function CreateTracer()
     local L = Drawing.new("Line")
     L.Visible      = false
@@ -158,7 +156,6 @@ local function CreateTracer()
     L.Transparency = 1
     return L
 end
-
 local function CreateHighlight(c)
     if c:FindFirstChild("ESPHighlight") then return end
     local h = Instance.new("Highlight", c)
@@ -173,11 +170,9 @@ local function CreateNametag(p,c)
     local head = c:FindFirstChild("Head")
     if not head then return end
     local bb = Instance.new("BillboardGui", c)
-    bb.Name        = "ESPNameTag"
-    bb.Adornee     = head
-    bb.Size        = UDim2.new(0,100,0,20)
-    bb.StudsOffset = Vector3.new(0,2.5,0)
-    bb.AlwaysOnTop = true
+    bb.Name, bb.Adornee      = "ESPNameTag", head
+    bb.Size, bb.StudsOffset  = UDim2.new(0,100,0,20), Vector3.new(0,2.5,0)
+    bb.AlwaysOnTop           = true
     local lbl = Instance.new("TextLabel", bb)
     lbl.Size                   = UDim2.fromScale(1,1)
     lbl.BackgroundTransparency = 1
@@ -201,7 +196,7 @@ end
 local function RefreshESP()
     local origin = GetTracerOrigin()
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
+        if p~=LocalPlayer then
             local c    = p.Character
             local root = c and c:FindFirstChild("HumanoidRootPart")
             local h    = c and c:FindFirstChildOfClass("Humanoid")
@@ -209,22 +204,19 @@ local function RefreshESP()
             if Config.ShowESP and alive then
                 local pos,on = Camera:WorldToViewportPoint(root.Position)
                 local dist   = (root.Position - Camera.CFrame.Position).Magnitude
-                if on and dist<MAX_TRACER_DISTANCE then
-                    local T = Tracers[p] or CreateTracer()
-                    Tracers[p] = T
-                    T.Visible = true
-                    T.From    = origin
-                    T.To      = Vector2.new(pos.X,pos.Y)
+                local T      = (on and dist<MAX_TRACER_DISTANCE) and (Tracers[p] or CreateTracer())
+                if T then
+                    Tracers[p], T.Visible, T.From, T.To = T, true, origin, Vector2.new(pos.X,pos.Y)
                 elseif Tracers[p] then
                     Tracers[p].Visible = false
                 end
                 CreateHighlight(c)
                 if Config.ShowNameTags then CreateNametag(p,c) end
-            else
-                if Tracers[p] then Tracers[p].Visible = false end
+            elseif Tracers[p] then
+                Tracers[p].Visible = false
                 if c then
                     if c:FindFirstChild("ESPHighlight") then c.ESPHighlight:Destroy() end
-                    if c:FindFirstChild("ESPNameTag")   then c.ESPNameTag:Destroy()   end
+                    if c:FindFirstChild("ESPNameTag")    then c.ESPNameTag:Destroy()    end
                 end
             end
         end
@@ -232,17 +224,12 @@ local function RefreshESP()
 end
 
 Players.PlayerRemoving:Connect(function(p)
-    if Tracers[p] then
-        Tracers[p]:Remove()
-        Tracers[p] = nil
-    end
+    if Tracers[p] then Tracers[p]:Remove(); Tracers[p]=nil end
 end)
 
 RunService.RenderStepped:Connect(function()
-    if Config.ShowESP then
-        RefreshESP()
-    else
-        for _, L in pairs(Tracers) do L:Remove() end
+    if Config.ShowESP then RefreshESP() else
+        for _,L in pairs(Tracers) do L:Remove() end
         Tracers = {}
     end
 end)
@@ -251,53 +238,36 @@ RunService.Stepped:Connect(function()
     if Config.Noclip then
         local c = LocalPlayer.Character
         if c then
-            for _, part in ipairs(c:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
+            for _,part in ipairs(c:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
             end
         end
     end
 end)
 
 -- ─── Teleport Behind Enemy (toggle with O) ───────────────────────────────
-
-local behindToggle = false
-UserInputService.InputBegan:Connect(function(inp, processed)
-    if not processed and inp.KeyCode == Enum.KeyCode.O then
-        behindToggle = not behindToggle
-    end
-end)
-
 RunService.Heartbeat:Connect(function()
     if not behindToggle then return end
 
     local seen = {}
-    for _, m in ipairs(ReplicatedStorage.Assets.Temp.ViewModels:GetChildren()) do
+    for _,m in ipairs(ReplicatedStorage.Assets.Temp.ViewModels:GetChildren()) do
         local nm = m.Name:gsub(" %- .*","")
-        if nm ~= LocalPlayer.Name then
-            seen[nm] = true
-        end
+        if nm~=LocalPlayer.Name then seen[nm]=true end
     end
 
-    for nm, _ in pairs(seen) do
+    for nm in pairs(seen) do
         local pl = Players:FindFirstChild(nm)
-        if pl
-        and pl.Team ~= LocalPlayer.Team
-        and pl.Character
-        and pl.Character:FindFirstChild("HumanoidRootPart")
-        and pl.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+        if pl and pl.Team~=LocalPlayer.Team
+        and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart")
+        and pl.Character:FindFirstChildOfClass("Humanoid").Health>0 then
 
             local eHRP = pl.Character.HumanoidRootPart
             local mHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if mHRP then
-                mHRP.CFrame = CFrame.new(
-                    eHRP.Position - eHRP.CFrame.LookVector * 5,
-                    eHRP.Position
-                )
+                mHRP.CFrame = CFrame.new(eHRP.Position - eHRP.CFrame.LookVector*5, eHRP.Position)
+                break  -- only break on successful teleport
             end
         end
-        break
     end
 end)
 
