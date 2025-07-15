@@ -44,7 +44,6 @@ local function hookCharacter(char)
     enforceSpeed(h)
 
     local hrp = char:WaitForChild("HumanoidRootPart", 5)
-    -- clean up any old fly parts
     if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
     if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
 
@@ -87,13 +86,12 @@ LocalPlayer.CharacterAdded:Connect(hookCharacter)
 -- ─── AimLock Only ──────────────────────────────────────────────────────────
 
 local RightDown = false
+local behindToggle = false
 
 UserInputService.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton2 then
         RightDown = true
-    end
-    -- **toggle behind-teleport on O** (no longer checking gameProcessed)
-    if i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == Enum.KeyCode.O then
+    elseif i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == Enum.KeyCode.O then
         behindToggle = not behindToggle
     end
 end)
@@ -204,13 +202,13 @@ local function RefreshESP()
     local origin = GetTracerOrigin()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
-            local c = p.Character
+            local c    = p.Character
             local root = c and c:FindFirstChild("HumanoidRootPart")
-            local h = c and c:FindFirstChildOfClass("Humanoid")
-            local alive = root and h and h.Health>0
+            local h    = c and c:FindFirstChildOfClass("Humanoid")
+            local alive= root and h and h.Health>0
             if Config.ShowESP and alive then
                 local pos,on = Camera:WorldToViewportPoint(root.Position)
-                local dist = (root.Position - Camera.CFrame.Position).Magnitude
+                local dist   = (root.Position - Camera.CFrame.Position).Magnitude
                 if on and dist<MAX_TRACER_DISTANCE then
                     local T = Tracers[p] or CreateTracer()
                     Tracers[p] = T
@@ -226,7 +224,7 @@ local function RefreshESP()
                 if Tracers[p] then Tracers[p].Visible = false end
                 if c then
                     if c:FindFirstChild("ESPHighlight") then c.ESPHighlight:Destroy() end
-                    if c:FindFirstChild("ESPNameTag") then c.ESPNameTag:Destroy() end
+                    if c:FindFirstChild("ESPNameTag")   then c.ESPNameTag:Destroy()   end
                 end
             end
         end
@@ -241,7 +239,9 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 RunService.RenderStepped:Connect(function()
-    if Config.ShowESP then RefreshESP() else 
+    if Config.ShowESP then
+        RefreshESP()
+    else
         for _, L in pairs(Tracers) do L:Remove() end
         Tracers = {}
     end
@@ -261,10 +261,6 @@ RunService.Stepped:Connect(function()
 end)
 
 -- ─── Teleport Behind Enemy (toggle with O) ───────────────────────────────
-local RunService = game:GetService("RunService")
-local Players    = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
 
 local behindToggle = false
 UserInputService.InputBegan:Connect(function(inp, processed)
@@ -273,12 +269,10 @@ UserInputService.InputBegan:Connect(function(inp, processed)
     end
 end)
 
--- On every Heartbeat (once per frame)
 RunService.Heartbeat:Connect(function()
     if not behindToggle then return end
 
     local seen = {}
-    -- collect all viewmodels
     for _, m in ipairs(ReplicatedStorage.Assets.Temp.ViewModels:GetChildren()) do
         local nm = m.Name:gsub(" %- .*","")
         if nm ~= LocalPlayer.Name then
@@ -286,7 +280,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- teleport behind the first live, enemy player
     for nm, _ in pairs(seen) do
         local pl = Players:FindFirstChild(nm)
         if pl
@@ -298,16 +291,14 @@ RunService.Heartbeat:Connect(function()
             local eHRP = pl.Character.HumanoidRootPart
             local mHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if mHRP then
-                -- warp 5 studs behind, no vertical offset
                 mHRP.CFrame = CFrame.new(
                     eHRP.Position - eHRP.CFrame.LookVector * 5,
                     eHRP.Position
                 )
             end
         end
-        break  -- only target the first one
+        break
     end
 end)
-
 
 print("haxegon_static loaded: AimLock, WalkSpeed, Fly ON, Noclip, ESP, Teleport-Behind [O]")
