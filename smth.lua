@@ -95,7 +95,7 @@ local AimConfig = {
     FOV = 150,
     Part = "Head",
     LockOnTarget = nil,
-    WallCheck = true,
+    WallCheck = false,
 }
 
 -- Valid target check
