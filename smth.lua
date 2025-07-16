@@ -187,10 +187,9 @@ RunService.RenderStepped:Connect(function()
         local targetPart = getTargetPart(AimConfig.LockOnTarget.Character)
         local targetPosition = Camera:WorldToScreenPoint(targetPart.Position)
         if targetPosition.Z > 0 then
-            local mousePos = UserInputService:GetMouseLocation()
+            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
             local aimPos = Vector2.new(targetPosition.X, targetPosition.Y)
             local moveDelta = (aimPos - mousePos) * AimConfig.Sensitivity
-            moveDelta = Vector2.new(math.clamp(moveDelta.X, -100, 100), math.clamp(moveDelta.Y, -100, 100))
             mousemoverel(moveDelta.X, moveDelta.Y)
         end
     else
@@ -200,7 +199,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
-
 
 -- ─── ESP & Tracers & Noclip ───────────────────────────────────────────────
 
