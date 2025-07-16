@@ -92,7 +92,7 @@ LocalPlayer.CharacterAdded:Connect(hookCharacter)
 local AimConfig = {
     Enabled = true,
     Sensitivity = 1,
-    FOV = 150,
+    FOV = 600,
     Part = "Head",
     LockOnTarget = nil,
     WallCheck = false,
