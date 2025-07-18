@@ -15,7 +15,6 @@ local CoreGui           = game:GetService("CoreGui")
 local lp        = Players.LocalPlayer
 local playerGui = lp:WaitForChild("PlayerGui")
 
-print("Loading Vadrift's Anti Chat & Screenshot Logger…")
 
 if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
     local startTime = tick()
@@ -35,18 +34,17 @@ if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
 
     -- Prevent double‑loading
     if _G.VadriftsACLLoaded then
-        showNotification("Vadrifts ACL", "Already loaded!", "rbxassetid://2541869220")
+        showNotification("Haxegon Injector", "Already loaded!", "rbxassetid://2541869220")
         print("Anti Chat Logger already loaded!")
         return
     end
     _G.VadriftsACLLoaded = true
 
     showNotification(
-        "Vadrifts ACL",
+        "Haxegon Injector",
         string.format("Loaded in %.2f seconds!", tick() - startTime),
         "rbxassetid://2541869220"
     )
-    print(string.format("Anti Chat Logger initialized in %.2f seconds!", tick() - startTime))
 
     -- Disable Roblox’s built‑in screenshot reports
     if setfflag then
@@ -102,7 +100,7 @@ else
     end) then
         loadstring(game:HttpGet("https://raw.githubusercontent.com/vqmpjayZ/More-Scripts/main/Anthony's%20ACL"))()
     end
-    print("Anti Chat & Screenshot Logger (legacy) loaded.")
+    print("Anti Chat & Screenshot Logger loaded.")
 end
 -- END SCRIPT ONE
 
@@ -434,5 +432,5 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("haxegon_static loaded: Anti‑Chat Logger, AimLock, WalkSpeed, Fly ON, Noclip, ESP, Teleport-Behind [O]")
+print("✅Haxegon Rival Script Injected")
 -- END SCRIPT TWO
