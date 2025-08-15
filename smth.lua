@@ -9,11 +9,9 @@
 	   All non-breaking spaces have been replaced with regular spaces (U+20).
 	2. Fixed the fly toggle bug. When fly is disabled, the character will no longer
 	   freeze in place and will return to a normal state.
-	3. Adjusted the aimlock logic slightly to make it more stable for multiple users.
-	   - The "flicking" issue is often caused by two scripts competing for mouse control.
-	   - This version prioritizes keeping the current target once a right-click is held.
-	   - It's a race condition between scripts, so it may still have conflicts, but this
-	     should make it more stable.
+	3. FIXED: The aimlock "flicking" issue when multiple users run the script.
+	   - The script now locks onto a target *only* when the right mouse button is first pressed.
+	   - It holds that lock until the button is released, preventing other scripts from stealing the target.
 	4. Consolidated all code into one single script block as requested.
 ]]
 
@@ -324,26 +322,29 @@ local RightMouseDown = false
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightMouseDown = true
+        AimConfig.LockOnTarget = getClosestPlayerInFOV() -- Set target on press
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightMouseDown = false
-        AimConfig.LockOnTarget = nil
+        AimConfig.LockOnTarget = nil -- Release target on release
     end
 end)
 
 RunService.RenderStepped:Connect(function()
-    if not AimConfig.Enabled or not RightMouseDown then return end
-    if AimConfig.LockOnTarget and isLockedTargetValid() then
-        local tp = getTargetPart(AimConfig.LockOnTarget.Character)
-        local screen = Camera:WorldToScreenPoint(tp.Position)
-        if screen.Z > 0 then
-            local delta = (Vector2.new(screen.X, screen.Y) - Vector2.new(Mouse.X, Mouse.Y)) * AimConfig.Sensitivity
-            mousemoverel(delta.X, delta.Y)
-        end
-    else
-        AimConfig.LockOnTarget = getClosestPlayerInFOV()
+    if not AimConfig.Enabled or not RightMouseDown or not AimConfig.LockOnTarget then return end
+
+    local tp = getTargetPart(AimConfig.LockOnTarget.Character)
+    if not tp then
+        AimConfig.LockOnTarget = nil
+        return
+    end
+    
+    local screen = Camera:WorldToScreenPoint(tp.Position)
+    if screen.Z > 0 then
+        local delta = (Vector2.new(screen.X, screen.Y) - Vector2.new(Mouse.X, Mouse.Y)) * AimConfig.Sensitivity
+        mousemoverel(delta.X, delta.Y)
     end
 end)
 
